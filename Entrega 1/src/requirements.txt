@@ -1,0 +1,20 @@
+# ===========================================
+# Requerimientos del proyecto:
+# Sistema de Anotación de Video (EDA + ML)
+# ===========================================
+
+# --- Procesamiento de video y multimedia ---
+opencv-python        # Lectura y procesamiento de videos (frames, FPS, resolución)
+mediapipe            # Extracción de landmarks articulares (seguimiento corporal)
+numpy                # Operaciones numéricas y vectoriales
+
+# --- Manejo y análisis de datos ---
+pandas               # Estructura de datos tabular (CSV, DataFrame)
+tqdm                 # Barras de progreso para procesamiento de videos
+
+# --- Visualización ---
+matplotlib           # Gráficas básicas (histogramas, barras, dispersión)
+seaborn              # Visualizaciones estadísticas avanzadas (boxplots, heatmaps)
+
+# --- Utilidades y sistema ---
+argparse             # Argumentos desde línea de comandos
