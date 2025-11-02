@@ -1,1 +1,4 @@
 ia_proyecto/**
+.venv/
+venv/
+.vscode/
