@@ -14,7 +14,12 @@ def run_script(script_path, description):
     print('='*80)
     
     try:
-        result = subprocess.run(['python', script_path], check=True, 
+        venv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'venv')
+        python_path = os.path.join(venv_path, 'Scripts', 'python.exe')
+        if not os.path.exists(python_path):
+            print(f"Error: No se encontró Python en {python_path}")
+            return False
+        result = subprocess.run([python_path, script_path], check=True, 
                               capture_output=True, text=True)
         print(result.stdout)
         if result.stderr:
