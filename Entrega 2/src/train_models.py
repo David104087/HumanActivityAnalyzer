@@ -95,12 +95,42 @@ def main():
     X_train, X_test, y_train, y_test, class_names = load_data()
     print(f"Datos cargados: {len(X_train)} muestras de entrenamiento, {len(X_test)} muestras de prueba")
     
-    # Definir modelos
-    models = {
-        'SVM': SVC(kernel='rbf', random_state=42),
-        'RandomForest': RandomForestClassifier(n_estimators=100, random_state=42),
-        'XGBoost': XGBClassifier(random_state=42)
+    # Cargar modelos optimizados si existen
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    optimized_models_dir = os.path.join(base_dir, 'results', 'models_optimized')
+    
+    models = {}
+    model_configs = {
+        'SVM': {
+            'class': SVC,
+            'params': {'kernel': 'rbf', 'random_state': 42, 'probability': True}
+        },
+        'RandomForest': {
+            'class': RandomForestClassifier,
+            'params': {'n_estimators': 100, 'random_state': 42}
+        },
+        'XGBoost': {
+            'class': XGBClassifier,
+            'params': {'random_state': 42}
+        }
     }
+    
+    # Intentar cargar parámetros optimizados
+    if os.path.exists(optimized_models_dir):
+        print("\nUsando parámetros optimizados encontrados:")
+        for model_name, config in model_configs.items():
+            model_path = os.path.join(optimized_models_dir, f"{model_name.lower()}_optimized.pkl")
+            if os.path.exists(model_path):
+                optimized_model = joblib.load(model_path)
+                print(f"- {model_name}: {optimized_model.get_params()}")
+                models[model_name] = config['class'](**optimized_model.get_params())
+            else:
+                print(f"- {model_name}: usando configuración por defecto")
+                models[model_name] = config['class'](**config['params'])
+    else:
+        print("\nUsando configuraciones por defecto para todos los modelos")
+        models = {name: config['class'](**config['params']) 
+                 for name, config in model_configs.items()}
     
     # Entrenar y evaluar cada modelo
     results = {}
