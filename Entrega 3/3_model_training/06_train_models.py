@@ -6,6 +6,7 @@ import joblib
 from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import cross_val_score, KFold
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.preprocessing import LabelEncoder
@@ -105,7 +106,8 @@ def main():
     models = {
         'SVM': SVC(kernel='rbf', random_state=42, probability=True),
         'RandomForest': RandomForestClassifier(n_estimators=100, random_state=42),
-        'XGBoost': XGBClassifier(random_state=42, use_label_encoder=False, eval_metric='mlogloss')
+        'XGBoost': XGBClassifier(random_state=42, use_label_encoder=False, eval_metric='mlogloss'),
+        'KNN': KNeighborsClassifier(n_neighbors=5, weights='uniform', p=2)
     }
     
     results = {}
