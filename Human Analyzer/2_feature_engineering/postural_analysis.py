@@ -247,7 +247,19 @@ def main():
     
     # Generar visualizaciones
     print("\nGenerando visualizaciones...")
-    visualizar_analisis_postural(df_features)
+    
+    # Combinar datos de landmarks y features para visualización completa
+    df_viz = df_landmarks.copy()
+    if "simetria_brazos" in df_features.columns:
+        # Agregar simetrías promedio por acción para visualización
+        df_viz['simetria_brazos'] = df_landmarks.groupby('action')['action'].transform(
+            lambda x: df_features[df_features['action'] == x.iloc[0]]['simetria_brazos'].mean()
+        )
+        df_viz['simetria_piernas'] = df_landmarks.groupby('action')['action'].transform(
+            lambda x: df_features[df_features['action'] == x.iloc[0]]['simetria_piernas'].mean()
+        )
+    
+    visualizar_analisis_postural(df_viz)
     
     print("\n" + "="*70)
     print("ANÁLISIS POSTURAL COMPLETADO")
