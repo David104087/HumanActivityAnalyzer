@@ -179,7 +179,7 @@ class SistemaReconocimientoTiempoReal:
         self.pose = self.mp_pose.Pose(
             min_detection_confidence=MIN_DETECTION_CONFIDENCE,
             min_tracking_confidence=MIN_TRACKING_CONFIDENCE,
-            model_complexity=1,
+            model_complexity=0,  # 0 es más rápido, 1 es balanceado, 2 es más preciso
             smooth_landmarks=True
         )
         
@@ -190,6 +190,10 @@ class SistemaReconocimientoTiempoReal:
         # Estado de visualización
         self.displayed_action = "INICIANDO..."
         self.displayed_confidence = 0.0
+        
+        # Contador de frames y estado del detector
+        self.frame_count = 0
+        self.detector_status = "Iniciando..."
         
         print("Sistema inicializado correctamente.\n")
     
@@ -220,6 +224,9 @@ class SistemaReconocimientoTiempoReal:
         frame: imagen BGR de OpenCV
         Retorna: frame procesado con visualización
         """
+        # Incrementar contador de frames
+        self.frame_count += 1
+        
         # Convertir a RGB para MediaPipe
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb_frame.flags.writeable = False
@@ -232,12 +239,25 @@ class SistemaReconocimientoTiempoReal:
         
         # Procesar landmarks
         if results.pose_landmarks:
-            # Dibujar esqueleto
+            self.detector_status = "Persona detectada"
+            # Dibujar esqueleto con estilo personalizado
+            landmark_style = self.mp_drawing.DrawingSpec(
+                color=(0, 255, 200),  # Cyan vibrante
+                thickness=3,
+                circle_radius=4
+            )
+            connection_style = self.mp_drawing.DrawingSpec(
+                color=(255, 180, 0),  # Naranja dorado
+                thickness=2,
+                circle_radius=2
+            )
+            
             self.mp_drawing.draw_landmarks(
                 frame,
                 results.pose_landmarks,
                 self.mp_pose.POSE_CONNECTIONS,
-                landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style()
+                landmark_drawing_spec=landmark_style,
+                connection_drawing_spec=connection_style
             )
             
             # Extraer ángulos
@@ -252,6 +272,7 @@ class SistemaReconocimientoTiempoReal:
                     self.predecir()
         else:
             # Si no detecta cuerpo, limpiar búferes
+            self.detector_status = "Sin persona"
             self.angle_deque.clear()
             self.prediction_history.clear()
             self.displayed_action = "BUSCANDO..."
@@ -329,102 +350,219 @@ class SistemaReconocimientoTiempoReal:
         self.displayed_action = accion_ganadora.upper()
     
     def dibujar_interfaz(self, frame):
-        """Dibuja la interfaz de usuario en el frame."""
+        """Dibuja la interfaz de usuario en el frame con diseño moderno."""
         h, w = frame.shape[:2]
-        
-        # Barra superior oscura
-        cv2.rectangle(frame, (0, 0), (w, UI_BAR_HEIGHT), (30, 30, 30), -1)
         
         # Determinar color según confianza
         if self.displayed_confidence > 0.8:
-            color = (0, 255, 0)  # Verde
+            color_principal = (50, 205, 50)  # Verde Lima
+            color_secundario = (34, 139, 34)  # Verde Oscuro
         elif self.displayed_confidence >= 0.5:
-            color = (0, 255, 255)  # Amarillo
+            color_principal = (0, 191, 255)  # Azul Cielo
+            color_secundario = (0, 120, 180)  # Azul Medio
         else:
-            color = (0, 0, 255)  # Rojo
+            color_principal = (255, 99, 71)  # Rojo Tomate
+            color_secundario = (178, 34, 34)  # Rojo Oscuro
         
-        # Texto: ACCION
+        # Panel lateral derecho
+        panel_width = 220
+        panel_x = w - panel_width
+        
+        # Fondo del panel sólido (sin transparencia para mejor rendimiento)
+        cv2.rectangle(frame, (panel_x, 0), (w, h), (25, 25, 35), -1)
+        
+        # Línea decorativa vertical
+        cv2.line(frame, (panel_x, 0), (panel_x, h), color_principal, 3)
+        
+        # Título del panel
         cv2.putText(
             frame,
-            "ACCION:",
-            (20, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (200, 200, 200),
+            "ACTIVIDAD",
+            (panel_x + 15, 35),
+            cv2.FONT_HERSHEY_DUPLEX,
+            0.65,
+            (220, 220, 220),
             1,
             cv2.LINE_AA
         )
         
-        # Texto: Acción detectada
+        # Acción detectada (más grande y centrada)
+        action_text = self.displayed_action
+        font_scale = 0.9 if len(action_text) > 10 else 1.1
+        text_size = cv2.getTextSize(action_text, cv2.FONT_HERSHEY_DUPLEX, font_scale, 3)[0]
+        text_x = panel_x + (panel_width - text_size[0]) // 2
+        
         cv2.putText(
             frame,
-            self.displayed_action,
-            (20, 70),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.2,
-            color,
-            2,
+            action_text,
+            (text_x, 85),
+            cv2.FONT_HERSHEY_DUPLEX,
+            font_scale,
+            color_principal,
+            3,
             cv2.LINE_AA
         )
         
-        # Texto: CONF
-        cv2.putText(
-            frame,
-            "CONF:",
-            (w - 220, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (200, 200, 200),
-            1,
-            cv2.LINE_AA
-        )
+        # Línea separadora
+        cv2.line(frame, (panel_x + 15, 110), (w - 15, 110), (80, 80, 90), 1)
         
-        # Texto: Porcentaje de confianza
-        conf_text = f"{self.displayed_confidence*100:.1f}%"
+        # Confianza con círculo de progreso
+        conf_y = 160
+        circle_center = (panel_x + 60, conf_y)
+        circle_radius = 40
+        
+        # Círculo de fondo
+        cv2.circle(frame, circle_center, circle_radius, (50, 50, 60), 5)
+        
+        # Arco de progreso (solo si hay confianza significativa)
+        angle = int(360 * self.displayed_confidence)
+        if angle > 5:  # Solo dibujar si hay progreso visible
+            axes = (circle_radius, circle_radius)
+            cv2.ellipse(frame, circle_center, axes, -90, 0, angle, color_principal, 5)
+        
+        # Porcentaje en el centro del círculo
+        conf_text = f"{int(self.displayed_confidence * 100)}"
+        text_size = cv2.getTextSize(conf_text, cv2.FONT_HERSHEY_DUPLEX, 0.9, 3)[0]
+        text_x = circle_center[0] - text_size[0] // 2
+        text_y = circle_center[1] + text_size[1] // 2
+        
         cv2.putText(
             frame,
             conf_text,
-            (w - 220, 70),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.0,
-            color,
-            2,
+            (text_x, text_y),
+            cv2.FONT_HERSHEY_DUPLEX,
+            0.9,
+            (255, 255, 255),
+            3,
             cv2.LINE_AA
         )
         
-        # Barra de progreso
-        barra_width = 180
-        barra_height = 15
-        barra_x = w - 220
-        barra_y = 80
-        
-        # Fondo de la barra
-        cv2.rectangle(
+        # Símbolo de porcentaje
+        cv2.putText(
             frame,
-            (barra_x, barra_y),
-            (barra_x + barra_width, barra_y + barra_height),
-            (100, 100, 100),
-            -1
-        )
-        
-        # Progreso
-        progreso_width = int(barra_width * self.displayed_confidence)
-        cv2.rectangle(
-            frame,
-            (barra_x, barra_y),
-            (barra_x + progreso_width, barra_y + barra_height),
-            color,
-            -1
-        )
-        
-        # Borde de la barra
-        cv2.rectangle(
-            frame,
-            (barra_x, barra_y),
-            (barra_x + barra_width, barra_y + barra_height),
+            "%",
+            (text_x + text_size[0] + 2, text_y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
             (200, 200, 200),
-            1
+            1,
+            cv2.LINE_AA
         )
+        
+        # Etiqueta "Confianza"
+        cv2.putText(
+            frame,
+            "CONFIANZA",
+            (panel_x + 125, conf_y - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (180, 180, 180),
+            1,
+            cv2.LINE_AA
+        )
+        
+        # Indicador de nivel con barras
+        bar_y_start = conf_y + 15
+        bar_spacing = 8
+        bar_height = 5
+        bar_width = 75
+        
+        levels = ["BAJA", "MEDIA", "ALTA"]
+        thresholds = [0.5, 0.8, 1.0]
+        
+        for i, (level, threshold) in enumerate(zip(levels, thresholds)):
+            y_pos = bar_y_start + (i * bar_spacing)
+            
+            # Determinar si esta barra está activa
+            if self.displayed_confidence >= (threshold - 0.3):
+                bar_color = color_principal
+                text_color = (255, 255, 255)
+            else:
+                bar_color = (60, 60, 70)
+                text_color = (120, 120, 130)
+            
+            # Dibujar mini barra
+            cv2.rectangle(
+                frame,
+                (panel_x + 130, y_pos),
+                (panel_x + 130 + bar_width, y_pos + bar_height),
+                bar_color,
+                -1
+            )
+        
+        # Línea separadora inferior
+        cv2.line(frame, (panel_x + 15, 240), (w - 15, 240), (80, 80, 90), 1)
+        
+        # Información adicional en la parte inferior del panel
+        info_y = 270
+        
+        # Determinar color del estado según detección
+        if self.detector_status == "Persona detectada":
+            status_color = (100, 220, 100)  # Verde
+        else:
+            status_color = (180, 100, 100)  # Rojo
+        
+        # Estado del detector
+        cv2.putText(
+            frame,
+            f"Estado: {self.detector_status}",
+            (panel_x + 15, info_y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            status_color,
+            1,
+            cv2.LINE_AA
+        )
+        
+        # Contador de frames
+        cv2.putText(
+            frame,
+            f"Frames: {self.frame_count}",
+            (panel_x + 15, info_y + 25),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (150, 150, 160),
+            1,
+            cv2.LINE_AA
+        )
+        
+        # Instrucciones
+        instructions = [
+            "Presiona 'Q'",
+            "para salir"
+        ]
+        
+        inst_y = h - 60
+        for i, inst in enumerate(instructions):
+            cv2.putText(
+                frame,
+                inst,
+                (panel_x + 15, inst_y + (i * 20)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45,
+                (120, 120, 130),
+                1,
+                cv2.LINE_AA
+            )
+        
+        # Banner superior minimalista (sin transparencia)
+        banner_height = 45
+        cv2.rectangle(frame, (0, 0), (panel_x, banner_height), (20, 20, 28), -1)
+        
+        # Título de la aplicación
+        cv2.putText(
+            frame,
+            "Human Activity Recognition",
+            (15, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            (200, 200, 210),
+            1,
+            cv2.LINE_AA
+        )
+        
+        # Línea decorativa horizontal
+        cv2.line(frame, (0, banner_height), (panel_x, banner_height), color_secundario, 2)
     
     def ejecutar(self):
         """Ejecuta el loop principal del sistema."""
@@ -464,7 +602,7 @@ class SistemaReconocimientoTiempoReal:
                 frame_procesado = self.procesar_frame(frame)
                 
                 # Mostrar resultado
-                cv2.imshow('Reconocimiento de Actividad Humana', frame_procesado)
+                cv2.imshow('Human Activity Recognition System', frame_procesado)
                 
                 # Detectar tecla 'q' para salir
                 if cv2.waitKey(1) & 0xFF == ord('q'):
