@@ -39,9 +39,6 @@ env/
 *~
 
 # Models (generated files)
-models/*.joblib
-models/*.pkl
-models/*.png
 !models/.gitkeep
 
 # Data files
