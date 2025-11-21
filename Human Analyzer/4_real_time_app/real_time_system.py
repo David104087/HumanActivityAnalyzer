@@ -195,6 +195,9 @@ class SistemaReconocimientoTiempoReal:
         self.frame_count = 0
         self.detector_status = "Iniciando..."
         
+        # Estado de pantalla completa
+        self.fullscreen = False
+        
         print("Sistema inicializado correctamente.\n")
     
     def cargar_modelos(self):
@@ -278,10 +281,10 @@ class SistemaReconocimientoTiempoReal:
             self.displayed_action = "BUSCANDO..."
             self.displayed_confidence = 0.0
         
-        # Dibujar interfaz
-        self.dibujar_interfaz(frame)
+        # Dibujar interfaz y obtener canvas extendido
+        frame_con_panel = self.dibujar_interfaz(frame)
         
-        return frame
+        return frame_con_panel
     
     def predecir(self):
         """Realiza predicción basada en la ventana de ángulos."""
@@ -350,10 +353,13 @@ class SistemaReconocimientoTiempoReal:
         self.displayed_action = accion_ganadora.upper()
     
     def dibujar_interfaz(self, frame):
-        """Dibuja la interfaz de usuario en el frame con diseño moderno."""
+        """
+        Dibuja la interfaz de usuario sobre el frame.
+        Incluye información de la acción detectada, confianza y estado.
+        """
         h, w = frame.shape[:2]
         
-        # Determinar color según confianza
+        # Determinar colores según confianza
         if self.displayed_confidence > 0.8:
             color_principal = (50, 205, 50)  # Verde Lima
             color_secundario = (34, 139, 34)  # Verde Oscuro
@@ -364,19 +370,26 @@ class SistemaReconocimientoTiempoReal:
             color_principal = (255, 99, 71)  # Rojo Tomate
             color_secundario = (178, 34, 34)  # Rojo Oscuro
         
-        # Panel lateral derecho
-        panel_width = 220
-        panel_x = w - panel_width
+        # Crear canvas más grande: video original + panel lateral
+        panel_width = 250
+        canvas_width = w + panel_width
+        canvas = np.zeros((h, canvas_width, 3), dtype=np.uint8)
         
-        # Fondo del panel sólido (sin transparencia para mejor rendimiento)
-        cv2.rectangle(frame, (panel_x, 0), (w, h), (25, 25, 35), -1)
+        # Colocar frame original en el lado izquierdo
+        canvas[0:h, 0:w] = frame
+        
+        # Coordenadas del panel (ahora en el canvas extendido)
+        panel_x = w
+        
+        # Fondo del panel sólido
+        cv2.rectangle(canvas, (panel_x, 0), (canvas_width, h), (25, 25, 35), -1)
         
         # Línea decorativa vertical
-        cv2.line(frame, (panel_x, 0), (panel_x, h), color_principal, 3)
+        cv2.line(canvas, (panel_x, 0), (panel_x, h), color_principal, 3)
         
         # Título del panel
         cv2.putText(
-            frame,
+            canvas,
             "ACTIVIDAD",
             (panel_x + 15, 35),
             cv2.FONT_HERSHEY_DUPLEX,
@@ -393,7 +406,7 @@ class SistemaReconocimientoTiempoReal:
         text_x = panel_x + (panel_width - text_size[0]) // 2
         
         cv2.putText(
-            frame,
+            canvas,
             action_text,
             (text_x, 85),
             cv2.FONT_HERSHEY_DUPLEX,
@@ -404,7 +417,7 @@ class SistemaReconocimientoTiempoReal:
         )
         
         # Línea separadora
-        cv2.line(frame, (panel_x + 15, 110), (w - 15, 110), (80, 80, 90), 1)
+        cv2.line(canvas, (panel_x + 15, 110), (canvas_width - 15, 110), (80, 80, 90), 1)
         
         # Confianza con círculo de progreso
         conf_y = 160
@@ -412,13 +425,13 @@ class SistemaReconocimientoTiempoReal:
         circle_radius = 40
         
         # Círculo de fondo
-        cv2.circle(frame, circle_center, circle_radius, (50, 50, 60), 5)
+        cv2.circle(canvas, circle_center, circle_radius, (50, 50, 60), 5)
         
         # Arco de progreso (solo si hay confianza significativa)
         angle = int(360 * self.displayed_confidence)
         if angle > 5:  # Solo dibujar si hay progreso visible
             axes = (circle_radius, circle_radius)
-            cv2.ellipse(frame, circle_center, axes, -90, 0, angle, color_principal, 5)
+            cv2.ellipse(canvas, circle_center, axes, -90, 0, angle, color_principal, 5)
         
         # Porcentaje en el centro del círculo
         conf_text = f"{int(self.displayed_confidence * 100)}"
@@ -427,7 +440,7 @@ class SistemaReconocimientoTiempoReal:
         text_y = circle_center[1] + text_size[1] // 2
         
         cv2.putText(
-            frame,
+            canvas,
             conf_text,
             (text_x, text_y),
             cv2.FONT_HERSHEY_DUPLEX,
@@ -439,7 +452,7 @@ class SistemaReconocimientoTiempoReal:
         
         # Símbolo de porcentaje
         cv2.putText(
-            frame,
+            canvas,
             "%",
             (text_x + text_size[0] + 2, text_y),
             cv2.FONT_HERSHEY_SIMPLEX,
@@ -451,7 +464,7 @@ class SistemaReconocimientoTiempoReal:
         
         # Etiqueta "Confianza"
         cv2.putText(
-            frame,
+            canvas,
             "CONFIANZA",
             (panel_x + 125, conf_y - 10),
             cv2.FONT_HERSHEY_SIMPLEX,
@@ -483,7 +496,7 @@ class SistemaReconocimientoTiempoReal:
             
             # Dibujar mini barra
             cv2.rectangle(
-                frame,
+                canvas,
                 (panel_x + 130, y_pos),
                 (panel_x + 130 + bar_width, y_pos + bar_height),
                 bar_color,
@@ -491,7 +504,7 @@ class SistemaReconocimientoTiempoReal:
             )
         
         # Línea separadora inferior
-        cv2.line(frame, (panel_x + 15, 240), (w - 15, 240), (80, 80, 90), 1)
+        cv2.line(canvas, (panel_x + 15, 240), (canvas_width - 15, 240), (80, 80, 90), 1)
         
         # Información adicional en la parte inferior del panel
         info_y = 270
@@ -504,7 +517,7 @@ class SistemaReconocimientoTiempoReal:
         
         # Estado del detector
         cv2.putText(
-            frame,
+            canvas,
             f"Estado: {self.detector_status}",
             (panel_x + 15, info_y),
             cv2.FONT_HERSHEY_SIMPLEX,
@@ -516,7 +529,7 @@ class SistemaReconocimientoTiempoReal:
         
         # Contador de frames
         cv2.putText(
-            frame,
+            canvas,
             f"Frames: {self.frame_count}",
             (panel_x + 15, info_y + 25),
             cv2.FONT_HERSHEY_SIMPLEX,
@@ -528,30 +541,33 @@ class SistemaReconocimientoTiempoReal:
         
         # Instrucciones
         instructions = [
-            "Presiona 'Q'",
-            "para salir"
+            "Q: Salir",
+            "F: Pantalla",
+            "   completa"
         ]
         
-        inst_y = h - 60
+        inst_y = h - 75
         for i, inst in enumerate(instructions):
             cv2.putText(
-                frame,
+                canvas,
                 inst,
                 (panel_x + 15, inst_y + (i * 20)),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.45,
+                0.4,
                 (120, 120, 130),
                 1,
                 cv2.LINE_AA
             )
         
-        # Banner superior minimalista (sin transparencia)
+        # Banner superior sobre el video (lado izquierdo)
         banner_height = 45
-        cv2.rectangle(frame, (0, 0), (panel_x, banner_height), (20, 20, 28), -1)
+        banner_overlay = canvas[0:banner_height, 0:w].copy()
+        cv2.rectangle(banner_overlay, (0, 0), (w, banner_height), (20, 20, 28), -1)
+        cv2.addWeighted(banner_overlay, 0.7, canvas[0:banner_height, 0:w], 0.3, 0, canvas[0:banner_height, 0:w])
         
         # Título de la aplicación
         cv2.putText(
-            frame,
+            canvas,
             "Human Activity Recognition",
             (15, 30),
             cv2.FONT_HERSHEY_SIMPLEX,
@@ -562,14 +578,38 @@ class SistemaReconocimientoTiempoReal:
         )
         
         # Línea decorativa horizontal
-        cv2.line(frame, (0, banner_height), (panel_x, banner_height), color_secundario, 2)
+        cv2.line(canvas, (0, banner_height), (w, banner_height), color_secundario, 2)
+        
+        # Retornar canvas con video + panel
+        return canvas
+    
+    def toggle_fullscreen(self, window_name):
+        """Alterna entre modo pantalla completa y modo ventana."""
+        self.fullscreen = not self.fullscreen
+        
+        if self.fullscreen:
+            # Modo pantalla completa
+            cv2.setWindowProperty(
+                window_name,
+                cv2.WND_PROP_FULLSCREEN,
+                cv2.WINDOW_FULLSCREEN
+            )
+            print("Pantalla completa activada (presiona F nuevamente para salir)")
+        else:
+            # Modo ventana normal
+            cv2.setWindowProperty(
+                window_name,
+                cv2.WND_PROP_FULLSCREEN,
+                cv2.WINDOW_NORMAL
+            )
+            print("Modo ventana restaurado")
     
     def ejecutar(self):
         """Ejecuta el loop principal del sistema."""
-        print("Iniciando captura de video...")
-        print("Presiona 'q' para salir.\n")
+        print("\nIniciando captura de video...")
+        print("Presiona 'q' para salir.")
+        print("Presiona 'f' para pantalla completa.\n")
         
-        # Abrir cámara
         cap = cv2.VideoCapture(0)
         
         if not cap.isOpened():
@@ -581,6 +621,11 @@ class SistemaReconocimientoTiempoReal:
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
         
+        window_name = 'Human Activity Recognition System'
+        
+        # Crear ventana redimensionable
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        
         print("="*60)
         print("SISTEMA EN EJECUCIÓN")
         print("="*60)
@@ -588,6 +633,7 @@ class SistemaReconocimientoTiempoReal:
         for accion in self.label_encoder.classes_:
             print(f"  - {accion}")
         print("\nPresiona 'q' para detener el sistema.")
+        print("Presiona 'f' para pantalla completa.")
         print("="*60 + "\n")
         
         try:
@@ -602,12 +648,16 @@ class SistemaReconocimientoTiempoReal:
                 frame_procesado = self.procesar_frame(frame)
                 
                 # Mostrar resultado
-                cv2.imshow('Human Activity Recognition System', frame_procesado)
+                cv2.imshow(window_name, frame_procesado)
                 
-                # Detectar tecla 'q' para salir
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+                # Detectar teclas
+                key = cv2.waitKey(1) & 0xFF
+                
+                if key == ord('q') or key == ord('Q'):
                     print("\nSaliendo del sistema...")
                     break
+                elif key == ord('f') or key == ord('F'):
+                    self.toggle_fullscreen(window_name)
         
         except KeyboardInterrupt:
             print("\n\nInterrumpido por el usuario.")
